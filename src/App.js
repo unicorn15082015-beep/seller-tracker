@@ -101,25 +101,46 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  const PROJECT_ID = "toro-1274a";
+  const fsUrl = (col) => `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${col}?pageSize=200`;
+  
+  const parseFsDocs = (data) => {
+    if (!data.documents) return [];
+    return data.documents.map(doc => {
+      const id = doc.name.split("/").pop();
+      const fields = {};
+      Object.entries(doc.fields || {}).forEach(([k, v]) => {
+        fields[k] = v.stringValue ?? v.integerValue ?? v.doubleValue ?? v.booleanValue ?? v.timestampValue ?? null;
+        if (v.integerValue) fields[k] = Number(v.integerValue);
+        if (v.doubleValue) fields[k] = Number(v.doubleValue);
+      });
+      return { id, ...fields };
+    });
+  };
+
+  const fetchData = async () => {
+    try {
+      const token = await user.getIdToken();
+      const headers = { Authorization: "Bearer " + token };
+      const [rO, rT, rF] = await Promise.all([
+        fetch(fsUrl("seller_orders"), { headers }),
+        fetch(fsUrl("seller_teams"), { headers }),
+        fetch(fsUrl("seller_forums"), { headers }),
+      ]);
+      const [dO, dT, dF] = await Promise.all([rO.json(), rT.json(), rF.json()]);
+      const orders = parseFsDocs(dO).sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+      setOrders(orders);
+      setTeams(parseFsDocs(dT));
+      setForums(parseFsDocs(dF));
+    } catch(err) {
+      console.log("Fetch error:", err);
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
-    const fetchData = async () => {
-      try {
-        const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
-        const [snapO, snapT, snapF] = await Promise.all([
-          getDocs(qO),
-          getDocs(collection(db, "seller_teams")),
-          getDocs(collection(db, "seller_forums")),
-        ]);
-        setOrders(snapO.docs.map(d => ({ id: d.id, ...d.data() })));
-        setTeams(snapT.docs.map(d => ({ id: d.id, ...d.data() })));
-        setForums(snapF.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch(err) {
-        console.log("Fetch error:", err);
-      }
-    };
     fetchData();
-    // Also setup realtime listeners
+    // Realtime listeners as backup
     const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
     const u1 = onSnapshot(qO, s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
     const u2 = onSnapshot(collection(db, "seller_teams"), s => setTeams(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
@@ -191,7 +212,7 @@ export default function App() {
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
           <button className="btn-icon-sm" onClick={() => setForumModal(true)} style={{width:"auto",padding:"0 8px",fontSize:12}}>Forum</button>
-          <button className="btn-icon-sm" onClick={() => setReloadKey(k=>k+1)} title="Tai lai du lieu" style={{fontSize:12}}>↻</button>
+          <button className="btn-icon-sm" onClick={() => { setReloadKey(k=>k+1); fetchData(); }} title="Tai lai du lieu" style={{fontSize:12}}>↻</button>
           <button className="btn-logout" onClick={() => { signOut(auth); }}>Dang xuat</button>
         </div>
       </header>
