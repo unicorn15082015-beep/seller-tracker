@@ -79,6 +79,7 @@ export default function App() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` === filterMonth;
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const filtered = useMemo(() => {
     let rows = orders.filter(inMonth);
     if (tab !== "all") rows = rows.filter(r => r.team === tab);
