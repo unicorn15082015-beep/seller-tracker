@@ -70,7 +70,7 @@ export default function App() {
   // Check sessionStorage after auth loads
   useEffect(() => {
     if (!authLoading && user) {
-      const verified = sessionStorage.getItem("otp_verified_" + user.uid) === "1";
+      const verified = localStorage.getItem("otp_verified_" + user.uid) === "1";
       setOtpVerified(verified);
     }
   }, [authLoading, user]);
@@ -91,7 +91,7 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u); setAuthLoading(false);
       if (u) {
-        const verified = sessionStorage.getItem("otp_verified_" + u.uid) === "1";
+        const verified = localStorage.getItem("otp_verified_" + u.uid) === "1";
         setOtpVerified(verified);
       } else {
         setOtpVerified(false);
@@ -158,8 +158,8 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Dang tai...</div>;
-  if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); sessionStorage.setItem("otp_verified_" + uid,"1"); }} />;
-  if (!otpVerified) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); sessionStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  if (!otpVerified) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
 
   return (
     <div className="app">
@@ -174,7 +174,7 @@ export default function App() {
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
           <button className="btn-icon-sm" onClick={() => setForumModal(true)} style={{width:"auto",padding:"0 8px",fontSize:12}}>Forum</button>
-          <button className="btn-logout" onClick={() => { sessionStorage.removeItem("otp_verified_" + user.uid); signOut(auth); }}>Dang xuat</button>
+          <button className="btn-logout" onClick={() => { localStorage.removeItem("otp_verified_" + user.uid); signOut(auth); }}>Dang xuat</button>
         </div>
       </header>
 
