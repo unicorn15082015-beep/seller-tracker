@@ -159,7 +159,7 @@ export default function App() {
 
   if (authLoading) return <div className="auth-loading">Dang tai...</div>;
   if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
-  if (!otpVerified) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  if (!otpVerified && !localStorage.getItem("otp_verified_" + user.uid)) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
 
   return (
     <div className="app">
