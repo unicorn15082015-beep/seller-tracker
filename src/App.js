@@ -6,7 +6,14 @@ import {
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { authenticator } from "otplib";
+import QRCode from "qrcode";
 import "./styles/main.css";
+
+// ─── ADMIN ───────────────────────────────────────────────────
+const ADMIN_UID = "76kdiqnd8sblIMR97u54RIXxZ5C2";
+const isAdmin = (user) => user?.uid === ADMIN_UID;
 
 // ─── HELPERS ─────────────────────────────────────────────────
 const fmtVND = (n) => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0)) + " đ";
@@ -46,8 +53,10 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
-  const [tab, setTab] = useState("all");
+  const [tab, setTab] = useState("pending");
+  const isAdminUser = isAdmin(user);
   const [search, setSearch] = useState("");
+  const [activeTeam, setActiveTeam] = useState("all");
   const [modal, setModal] = useState(null);
   const [teamModal, setTeamModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,19 +90,27 @@ export default function App() {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filteredByMonth = useMemo(() => orders.filter(inMonth), [orders, filterMonth]);
+
   const filtered = useMemo(() => {
-    let rows = orders.filter(inMonth);
-    if (tab !== "all") rows = rows.filter(r => r.team === tab);
+    let rows = filteredByMonth;
+    // Filter by status tab
+    if (tab === "pending") rows = rows.filter(r => r.trangThai === "Pending");
+    else if (tab === "issues") rows = rows.filter(r => r.trangThai === "Issues");
+    else if (tab === "completed") rows = rows.filter(r => r.trangThai === "Completed");
+    // Filter by team
+    if (activeTeam !== "all") rows = rows.filter(r => r.team === activeTeam);
+    // Search
     if (search) rows = rows.filter(r => (r.orderId || "").toLowerCase().includes(search.toLowerCase()));
     return rows;
-  }, [orders, tab, search, filterMonth]);
+  }, [filteredByMonth, tab, activeTeam, search]);
 
   // Stats
   const totalVND = filtered.reduce((s, r) => s + (r.giaNhap || 0), 0);
   const totalUSD = filtered.reduce((s, r) => s + (r.giaBan || 0), 0);
-  const completed = filtered.filter(r => r.trangThai === "Completed").length;
-  const pending = filtered.filter(r => r.trangThai === "Pending").length;
-  const issues = filtered.filter(r => r.trangThai === "Issues").length;
+  const completedCount = filteredByMonth.filter(r => r.trangThai === "Completed").length;
+  const pendingCount = filteredByMonth.filter(r => r.trangThai === "Pending").length;
+  const issuesCount = filteredByMonth.filter(r => r.trangThai === "Issues").length;
 
   // CRUD
   const saveOrder = async (data, id) => {
@@ -154,16 +171,31 @@ export default function App() {
         <div className="sum-card red"><div className="sum-label">Tổng Giá Nhập</div><div className="sum-value">{fmtVND(totalVND)}</div></div>
         <div className="sum-card green"><div className="sum-label">Tổng Giá Bán</div><div className="sum-value">{fmtUSD(totalUSD)}</div></div>
         <div className="sum-card blue"><div className="sum-label">Tổng Đơn</div><div className="sum-value">{filtered.length}</div></div>
-        <div className="sum-card green"><div className="sum-label">Completed</div><div className="sum-value">{completed}</div></div>
-        <div className="sum-card yellow"><div className="sum-label">Pending</div><div className="sum-value">{pending}</div></div>
-        <div className="sum-card red"><div className="sum-label">Issues</div><div className="sum-value">{issues}</div></div>
+        <div className="sum-card green"><div className="sum-label">Completed</div><div className="sum-value">{completedCount}</div></div>
+        <div className="sum-card yellow"><div className="sum-label">Pending</div><div className="sum-value">{pendingCount}</div></div>
+        <div className="sum-card red"><div className="sum-label">Issues</div><div className="sum-value">{issuesCount}</div></div>
       </div>
 
-      {/* TABS */}
+      {/* STATUS TABS */}
+      <div className="status-tabs">
+        <button className={`status-tab yellow ${tab === "pending" ? "active" : ""}`} onClick={() => setTab("pending")}>
+          ⏳ Pending <span className="tab-count">{pendingCount}</span>
+        </button>
+        <button className={`status-tab red ${tab === "issues" ? "active" : ""}`} onClick={() => setTab("issues")}>
+          ⚠️ Issues <span className="tab-count">{issuesCount}</span>
+        </button>
+        {isAdminUser && (
+          <button className={`status-tab green ${tab === "completed" ? "active" : ""}`} onClick={() => setTab("completed")}>
+            ✅ Completed <span className="tab-count">{completedCount}</span>
+          </button>
+        )}
+      </div>
+
+      {/* TEAM TABS */}
       <div className="team-tabs">
-        <button className={`team-tab ${tab === "all" ? "active" : ""}`} onClick={() => setTab("all")}>📋 Tất cả</button>
+        <button className={`team-tab ${activeTeam === "all" ? "active" : ""}`} onClick={() => setActiveTeam("all")}>📋 Tất cả</button>
         {teams.map(t => (
-          <button key={t.id} className={`team-tab ${tab === t.name ? "active" : ""}`} onClick={() => setTab(t.name)}>
+          <button key={t.id} className={`team-tab ${activeTeam === t.name ? "active" : ""}`} onClick={() => setActiveTeam(t.name)}>
             {t.name}
           </button>
         ))}
@@ -220,10 +252,31 @@ export default function App() {
                       </a>
                     ) : "—"}
                   </td>
-                  <td><span className={`badge ${STATUS_COLORS[r.trangThai] || "blue"}`}>{r.trangThai}</span></td>
+                  <td>
+                    {isAdminUser ? (
+                      <select
+                        className={`status-select ${STATUS_COLORS[r.trangThai] || "blue"}`}
+                        value={r.trangThai}
+                        onChange={e => updateDoc(doc(db, "seller_orders", r.id), { trangThai: e.target.value })}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Issues">Issues</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    ) : (
+                      <select
+                        className={`status-select ${STATUS_COLORS[r.trangThai] || "blue"}`}
+                        value={r.trangThai}
+                        onChange={e => { if(e.target.value !== "Completed") updateDoc(doc(db, "seller_orders", r.id), { trangThai: e.target.value }); }}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Issues">Issues</option>
+                      </select>
+                    )}
+                  </td>
                   <td className="actions">
                     <button className="icon-btn" onClick={() => setModal({ data: r })}><Icon name="edit" size={13}/></button>
-                    <button className="icon-btn danger" onClick={() => deleteOrder(r.id)}><Icon name="trash" size={13}/></button>
+                    {isAdminUser && <button className="icon-btn danger" onClick={() => deleteOrder(r.id)}><Icon name="trash" size={13}/></button>}
                   </td>
                 </tr>
               ))}
@@ -251,7 +304,7 @@ function OrderModal({ data, teams, onClose, onSave }) {
     giaBan: data?.giaBan || "",
     team: data?.team || (teams[0]?.name || ""),
     link: data?.link || "",
-    trangThai: data?.trangThai || "Pending",
+    trangThai: data?.trangThai || "Pending", // auto Pending for new orders
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -282,10 +335,9 @@ function OrderModal({ data, teams, onClose, onSave }) {
               </select>
             </Field>
             <Field label="Trạng Thái">
-              <select value={form.trangThai} onChange={e => set("trangThai", e.target.value)}>
-                <option>Pending</option>
-                <option>Completed</option>
-                <option>Issues</option>
+              <select value={form.trangThai} onChange={e => set("trangThai", e.target.value)} disabled={!isAdmin(null) && form.trangThai === "Completed"}>
+                <option value="Pending">Pending</option>
+                <option value="Issues">Issues</option>
               </select>
             </Field>
           </div>
@@ -352,18 +404,60 @@ function Field({ label, children }) {
 function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState("login"); // login | setup | verify
+  const [qrUrl, setQrUrl] = useState("");
+  const [secret, setSecret] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [tempUser, setTempUser] = useState(null);
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Vui lòng nhập đầy đủ"); return; }
     setLoading(true); setError("");
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const u = cred.user;
+      setTempUser(u);
+      // Check if TOTP secret exists
+      const totpDoc = await getDoc(doc(db, "totp_secrets", u.uid));
+      if (totpDoc.exists()) {
+        // Has secret → verify OTP
+        setSecret(totpDoc.data().secret);
+        setStep("verify");
+      } else {
+        // No secret → setup TOTP
+        const newSecret = authenticator.generateSecret();
+        setSecret(newSecret);
+        const otpauth = authenticator.keyuri(email, "Seller Tracker", newSecret);
+        const qr = await QRCode.toDataURL(otpauth);
+        setQrUrl(qr);
+        setStep("setup");
+      }
+      await signOut(auth); // sign out until OTP verified
     } catch {
       setError("Email hoặc mật khẩu không đúng");
-      setLoading(false);
     }
+    setLoading(false);
+  };
+
+  const handleSetup = async () => {
+    if (!authenticator.verify({ token: otp, secret })) {
+      setError("Mã OTP không đúng, thử lại"); return;
+    }
+    setLoading(true);
+    await setDoc(doc(db, "totp_secrets", tempUser.uid), { secret });
+    await signInWithEmailAndPassword(auth, email, password);
+    setLoading(false);
+  };
+
+  const handleVerify = async () => {
+    if (!authenticator.verify({ token: otp, secret })) {
+      setError("Mã OTP không đúng"); return;
+    }
+    setLoading(true);
+    await signInWithEmailAndPassword(auth, email, password);
+    setLoading(false);
   };
 
   return (
@@ -372,14 +466,42 @@ function LoginScreen() {
         <div className="login-logo">
           <span style={{fontSize:32}}>🛒</span>
           <div className="login-title">SELLER TRACKER</div>
-          <div className="login-sub">Đăng nhập để tiếp tục</div>
+          <div className="login-sub">
+            {step === "login" && "Đăng nhập để tiếp tục"}
+            {step === "setup" && "Thiết lập xác thực 2 bước"}
+            {step === "verify" && "Nhập mã xác thực"}
+          </div>
         </div>
-        <div className="login-fields">
-          <div className="field"><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" onKeyDown={e => e.key==="Enter" && handleLogin()}/></div>
-          <div className="field"><label>Mật khẩu</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key==="Enter" && handleLogin()}/></div>
-          {error && <div className="login-error">{error}</div>}
-          <button className="btn-login" onClick={handleLogin} disabled={loading}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</button>
-        </div>
+
+        {step === "login" && (
+          <div className="login-fields">
+            <div className="field"><label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" onKeyDown={e => e.key==="Enter" && handleLogin()}/></div>
+            <div className="field"><label>Mật khẩu</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key==="Enter" && handleLogin()}/></div>
+            {error && <div className="login-error">{error}</div>}
+            <button className="btn-login" onClick={handleLogin} disabled={loading}>{loading ? "Đang kiểm tra..." : "Tiếp tục"}</button>
+          </div>
+        )}
+
+        {step === "setup" && (
+          <div className="login-fields">
+            <div className="totp-setup-note">Quét QR code bằng app <b>Authy</b> hoặc Google Authenticator</div>
+            {qrUrl && <img src={qrUrl} alt="QR Code" className="qr-code"/>}
+            <div className="totp-secret-box">Secret: <span>{secret}</span></div>
+            <div className="field"><label>Nhập mã 6 số để xác nhận</label><input type="text" inputMode="numeric" maxLength={6} value={otp} onChange={e => setOtp(e.target.value)} placeholder="000000" onKeyDown={e => e.key==="Enter" && handleSetup()}/></div>
+            {error && <div className="login-error">{error}</div>}
+            <button className="btn-login" onClick={handleSetup} disabled={loading}>{loading ? "Đang xác nhận..." : "Xác nhận & Đăng nhập"}</button>
+          </div>
+        )}
+
+        {step === "verify" && (
+          <div className="login-fields">
+            <div className="totp-setup-note">Mở app <b>Authy</b> và nhập mã 6 số</div>
+            <div className="field"><label>Mã OTP</label><input type="text" inputMode="numeric" maxLength={6} value={otp} onChange={e => setOtp(e.target.value)} placeholder="000000" autoFocus onKeyDown={e => e.key==="Enter" && handleVerify()}/></div>
+            {error && <div className="login-error">{error}</div>}
+            <button className="btn-login" onClick={handleVerify} disabled={loading}>{loading ? "Đang xác nhận..." : "Đăng nhập"}</button>
+            <button className="btn-back" onClick={() => { setStep("login"); setError(""); setOtp(""); }}>← Quay lại</button>
+          </div>
+        )}
       </div>
     </div>
   );
