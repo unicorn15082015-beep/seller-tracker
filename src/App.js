@@ -1,7 +1,7 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  collection, addDoc, onSnapshot, query, orderBy,
+  collection, addDoc, onSnapshot, query, orderBy, getDocs,
   deleteDoc, doc, updateDoc, serverTimestamp
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
@@ -103,24 +103,28 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    let u1, u2, u3;
-    const startListeners = () => {
-      const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
-      u1 = onSnapshot(qO, 
-        s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))),
-        err => { console.log("Orders error:", err); setTimeout(startListeners, 2000); }
-      );
-      u2 = onSnapshot(collection(db, "seller_teams"), 
-        s => setTeams(s.docs.map(d => ({ id: d.id, ...d.data() }))),
-        err => console.log("Teams error:", err)
-      );
-      u3 = onSnapshot(collection(db, "seller_forums"), 
-        s => setForums(s.docs.map(d => ({ id: d.id, ...d.data() }))),
-        err => console.log("Forums error:", err)
-      );
+    const fetchData = async () => {
+      try {
+        const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
+        const [snapO, snapT, snapF] = await Promise.all([
+          getDocs(qO),
+          getDocs(collection(db, "seller_teams")),
+          getDocs(collection(db, "seller_forums")),
+        ]);
+        setOrders(snapO.docs.map(d => ({ id: d.id, ...d.data() })));
+        setTeams(snapT.docs.map(d => ({ id: d.id, ...d.data() })));
+        setForums(snapF.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch(err) {
+        console.log("Fetch error:", err);
+      }
     };
-    startListeners();
-    return () => { u1&&u1(); u2&&u2(); u3&&u3(); };
+    fetchData();
+    // Also setup realtime listeners
+    const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
+    const u1 = onSnapshot(qO, s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+    const u2 = onSnapshot(collection(db, "seller_teams"), s => setTeams(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+    const u3 = onSnapshot(collection(db, "seller_forums"), s => setForums(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+    return () => { u1(); u2(); u3(); };
   }, [user, reloadKey]);
 
   const inMonth = (r) => {
