@@ -154,8 +154,8 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Dang tai...</div>;
-  if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
-  if (!otpVerified && !localStorage.getItem("otp_verified_" + user.uid)) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  if (!user) return <LoginScreen onOtpVerified={(uid) => { console.log("OTP verified for:", uid); setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  if (!otpVerified && !localStorage.getItem("otp_verified_" + user.uid)) return <LoginScreen onOtpVerified={(uid) => { console.log("OTP verified for:", uid); setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
 
   return (
     <div className="app">
@@ -389,6 +389,7 @@ function LoginScreen({ onOtpVerified }) {
     setError("");
     const expected = await generateTOTP(SHARED_TOTP_SECRET);
     if (otp !== expected) { setError("Ma OTP khong dung"); return; }
+    console.log("Setup OTP for uid:", tempUser.uid);
     localStorage.setItem("totp_seen_" + tempUser.uid, "1");
     onOtpVerified(tempUser.uid);
   };
@@ -397,6 +398,7 @@ function LoginScreen({ onOtpVerified }) {
     setError("");
     const expected = await generateTOTP(SHARED_TOTP_SECRET);
     if (otp !== expected) { setError("Ma OTP khong dung"); return; }
+    console.log("Verify OTP for uid:", tempUser.uid);
     onOtpVerified(tempUser.uid);
   };
 
