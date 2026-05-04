@@ -84,7 +84,7 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) {
-        const verified = localStorage.getItem("otp_verified_" + u.uid) === "1";
+        const verified = document.cookie.includes("otp_" + u.uid + "=1");
         setOtpVerified(verified);
         setUser(u);
       } else {
@@ -154,8 +154,9 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Dang tai...</div>;
-  if (!user) return <LoginScreen onOtpVerified={(uid) => { console.log("OTP verified for:", uid); setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
-  if (!otpVerified && !localStorage.getItem("otp_verified_" + user.uid)) return <LoginScreen onOtpVerified={(uid) => { console.log("OTP verified for:", uid); setOtpVerified(true); localStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  const getCookie = (name) => document.cookie.split(";").find(c => c.trim().startsWith(name + "="))?.split("=")[1];
+  if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); document.cookie = "otp_" + uid + "=1;path=/;max-age=86400"; }} />;
+  if (!otpVerified && !getCookie("otp_" + user.uid)) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); document.cookie = "otp_" + uid + "=1;path=/;max-age=86400"; }} />;
 
   return (
     <div className="app">
@@ -170,7 +171,7 @@ export default function App() {
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
           <button className="btn-icon-sm" onClick={() => setForumModal(true)} style={{width:"auto",padding:"0 8px",fontSize:12}}>Forum</button>
-          <button className="btn-logout" onClick={() => { localStorage.removeItem("otp_verified_" + user.uid); signOut(auth); }}>Dang xuat</button>
+          <button className="btn-logout" onClick={() => { document.cookie = "otp_" + user.uid + "=;path=/;max-age=0"; signOut(auth); }}>Dang xuat</button>
         </div>
       </header>
 
@@ -389,7 +390,7 @@ function LoginScreen({ onOtpVerified }) {
     setError("");
     const expected = await generateTOTP(SHARED_TOTP_SECRET);
     if (otp !== expected) { setError("Ma OTP khong dung"); return; }
-    console.log("Setup OTP for uid:", tempUser.uid);
+    document.cookie = "otp_" + tempUser.uid + "=1;path=/;max-age=86400";
     localStorage.setItem("totp_seen_" + tempUser.uid, "1");
     onOtpVerified(tempUser.uid);
   };
@@ -398,7 +399,7 @@ function LoginScreen({ onOtpVerified }) {
     setError("");
     const expected = await generateTOTP(SHARED_TOTP_SECRET);
     if (otp !== expected) { setError("Ma OTP khong dung"); return; }
-    console.log("Verify OTP for uid:", tempUser.uid);
+    document.cookie = "otp_" + tempUser.uid + "=1;path=/;max-age=86400";
     onOtpVerified(tempUser.uid);
   };
 
