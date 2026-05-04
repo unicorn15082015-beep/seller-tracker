@@ -453,6 +453,8 @@ function LoginScreen({ onOtpVerified }) {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const u = cred.user;
       setTempUser(u);
+      // Wait for Firestore connection
+      await new Promise(r => setTimeout(r, 1500));
       const totpDoc = await getDoc(doc(db, "totp_secrets", u.uid));
       if (totpDoc.exists()) {
         setSecret(totpDoc.data().secret);
