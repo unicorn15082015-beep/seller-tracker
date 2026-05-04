@@ -445,17 +445,18 @@ function LoginScreen() {
     if (!email || !password) { setError("Vui lòng nhập đầy đủ"); return; }
     setLoading(true); setError("");
     try {
+      // Step 1: Login temporarily to get uid
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const u = cred.user;
       setTempUser(u);
-      // Check if TOTP secret exists
+      // Step 2: Immediately sign out to prevent app from loading
+      await signOut(auth);
+      // Step 3: Check if TOTP secret exists
       const totpDoc = await getDoc(doc(db, "totp_secrets", u.uid));
       if (totpDoc.exists()) {
-        // Has secret → verify OTP
         setSecret(totpDoc.data().secret);
         setStep("verify");
       } else {
-        // No secret → setup TOTP
         const newSecret = generateSecret();
         setSecret(newSecret);
         const otpauth = `otpauth://totp/Seller%20Tracker:${encodeURIComponent(email)}?secret=${newSecret}&issuer=SellerTracker`;
@@ -463,8 +464,7 @@ function LoginScreen() {
         setQrUrl(qr);
         setStep("setup");
       }
-      await signOut(auth); // sign out until OTP verified
-    } catch {
+    } catch(e) {
       setError("Email hoặc mật khẩu không đúng");
     }
     setLoading(false);
