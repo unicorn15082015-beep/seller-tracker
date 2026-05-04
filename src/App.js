@@ -102,7 +102,7 @@ export default function App() {
   }, []);
 
   const PROJECT_ID = "toro-1274a";
-  const fsUrl = (col) => `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${col}?pageSize=200`;
+  const fsUrl = (col) => `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${col}?pageSize=200&_=${Date.now()}`;
   
   const parseFsDocs = (data) => {
     if (!data.documents) return [];
@@ -120,8 +120,8 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const token = await user.getIdToken();
-      const headers = { Authorization: "Bearer " + token };
+      const token = await user.getIdToken(true); // force refresh token
+      const headers = { Authorization: "Bearer " + token, "Cache-Control": "no-cache" };
       const [rO, rT, rF] = await Promise.all([
         fetch(fsUrl("seller_orders"), { headers }),
         fetch(fsUrl("seller_teams"), { headers }),
