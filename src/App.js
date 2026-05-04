@@ -67,13 +67,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [otpVerified, setOtpVerified] = useState(false);
 
-  // Check sessionStorage after auth loads
-  useEffect(() => {
-    if (!authLoading && user) {
-      const verified = localStorage.getItem("otp_verified_" + user.uid) === "1";
-      setOtpVerified(verified);
-    }
-  }, [authLoading, user]);
+
   const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
   const [forums, setForums] = useState([]);
@@ -89,13 +83,15 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u); setAuthLoading(false);
       if (u) {
         const verified = localStorage.getItem("otp_verified_" + u.uid) === "1";
         setOtpVerified(verified);
+        setUser(u);
       } else {
         setOtpVerified(false);
+        setUser(null);
       }
+      setAuthLoading(false);
     });
     return () => unsub();
   }, []);
