@@ -6,8 +6,38 @@ import {
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "./firebase";
-import { authenticator } from "otplib/authenticator";
 import QRCode from "qrcode";
+
+// ─── TOTP PURE JS ────────────────────────────────────────────
+async function hmacSHA1(key, data) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, data));
+}
+function base32Decode(s) {
+  const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0, val = 0;
+  const out = [];
+  for (const c of s.replace(/=+$/, "").toUpperCase()) {
+    val = (val << 5) | alpha.indexOf(c);
+    bits += 5;
+    if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; }
+  }
+  return new Uint8Array(out);
+}
+async function generateTOTP(secret) {
+  const key = base32Decode(secret);
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const buf = new ArrayBuffer(8);
+  new DataView(buf).setUint32(4, counter, false);
+  const hmac = await hmacSHA1(key, new Uint8Array(buf));
+  const offset = hmac[19] & 0xf;
+  const code = ((hmac[offset] & 0x7f) << 24 | hmac[offset+1] << 16 | hmac[offset+2] << 8 | hmac[offset+3]) % 1000000;
+  return String(code).padStart(6, "0");
+}
+function generateSecret() {
+  const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  return Array.from(crypto.getRandomValues(new Uint8Array(20))).map(b => alpha[b % 32]).join("");
+}
 import "./styles/main.css";
 
 // ─── ADMIN ───────────────────────────────────────────────────
@@ -426,9 +456,9 @@ function LoginScreen() {
         setStep("verify");
       } else {
         // No secret → setup TOTP
-        const newSecret = authenticator.generateSecret();
+        const newSecret = generateSecret();
         setSecret(newSecret);
-        const otpauth = authenticator.keyuri(email, "Seller Tracker", newSecret);
+        const otpauth = `otpauth://totp/Seller%20Tracker:${encodeURIComponent(email)}?secret=${newSecret}&issuer=SellerTracker`;
         const qr = await QRCode.toDataURL(otpauth);
         setQrUrl(qr);
         setStep("setup");
@@ -440,20 +470,18 @@ function LoginScreen() {
     setLoading(false);
   };
 
-  const handleSetup = async () => {
-    if (!authenticator.verify({ token: otp, secret })) {
-      setError("Mã OTP không đúng, thử lại"); return;
-    }
+  const handleSetup = async () => { setError('');
+    const expected = await generateTOTP(secret);
+    if (otp !== expected) { setError("Mã OTP không đúng, thử lại"); return; }
     setLoading(true);
     await setDoc(doc(db, "totp_secrets", tempUser.uid), { secret });
     await signInWithEmailAndPassword(auth, email, password);
     setLoading(false);
   };
 
-  const handleVerify = async () => {
-    if (!authenticator.verify({ token: otp, secret })) {
-      setError("Mã OTP không đúng"); return;
-    }
+  const handleVerify = async () => { setError('');
+    const expected2 = await generateTOTP(secret);
+    if (otp !== expected2) { setError("Mã OTP không đúng"); return; }
     setLoading(true);
     await signInWithEmailAndPassword(auth, email, password);
     setLoading(false);
