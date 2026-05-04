@@ -80,6 +80,7 @@ const Icon = ({ name, size = 16 }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [otpVerified, setOtpVerified] = useState(false);
   const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tab, setTab] = useState("pending");
@@ -93,7 +94,11 @@ export default function App() {
   const [filterMonth, setFilterMonth] = useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); });
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthLoading(false);
+      if (!u) setOtpVerified(false);
+    });
     return () => unsub();
   }, []);
 
@@ -173,7 +178,7 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Đang tải...</div>;
-  if (!user) return <LoginScreen />;
+  if (!user || !otpVerified) return <LoginScreen onOtpVerified={() => setOtpVerified(true)} />;
 
   return (
     <div className="app">
@@ -430,7 +435,7 @@ function Field({ label, children }) {
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────
-function LoginScreen() {
+function LoginScreen({ onOtpVerified }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -445,13 +450,9 @@ function LoginScreen() {
     if (!email || !password) { setError("Vui lòng nhập đầy đủ"); return; }
     setLoading(true); setError("");
     try {
-      // Step 1: Login temporarily to get uid
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const u = cred.user;
       setTempUser(u);
-      // Step 2: Immediately sign out to prevent app from loading
-      await signOut(auth);
-      // Step 3: Check if TOTP secret exists
       const totpDoc = await getDoc(doc(db, "totp_secrets", u.uid));
       if (totpDoc.exists()) {
         setSecret(totpDoc.data().secret);
@@ -475,16 +476,14 @@ function LoginScreen() {
     if (otp !== expected) { setError("Mã OTP không đúng, thử lại"); return; }
     setLoading(true);
     await setDoc(doc(db, "totp_secrets", tempUser.uid), { secret });
-    await signInWithEmailAndPassword(auth, email, password);
+    onOtpVerified();
     setLoading(false);
   };
 
   const handleVerify = async () => { setError('');
     const expected2 = await generateTOTP(secret);
     if (otp !== expected2) { setError("Mã OTP không đúng"); return; }
-    setLoading(true);
-    await signInWithEmailAndPassword(auth, email, password);
-    setLoading(false);
+    onOtpVerified();
   };
 
   return (
