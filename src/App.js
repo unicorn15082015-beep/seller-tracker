@@ -100,6 +100,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  const inMonth = (r) => {
     if (!filterMonth) return true;
     const d = r.ngay ? new Date(r.ngay + "T00:00:00") : (r.createdAt?.toDate ? r.createdAt.toDate() : new Date());
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` === filterMonth;
