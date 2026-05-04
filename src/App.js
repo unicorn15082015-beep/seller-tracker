@@ -65,7 +65,15 @@ const Icon = ({ name, size = 16 }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [otpVerified, setOtpVerified] = useState(() => sessionStorage.getItem("otp_verified") === "1");
+  const [otpVerified, setOtpVerified] = useState(false);
+
+  // Check sessionStorage after auth loads
+  useEffect(() => {
+    if (!authLoading && user) {
+      const verified = sessionStorage.getItem("otp_verified_" + user.uid) === "1";
+      setOtpVerified(verified);
+    }
+  }, [authLoading, user]);
   const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
   const [forums, setForums] = useState([]);
@@ -82,7 +90,7 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u); setAuthLoading(false);
-      if (!u) { setOtpVerified(false); sessionStorage.removeItem("otp_verified"); }
+      if (!u) { setOtpVerified(false); }
     });
     return () => unsub();
   }, []);
@@ -147,7 +155,8 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Dang tai...</div>;
-  if (!user || !otpVerified) return <LoginScreen onOtpVerified={() => { setOtpVerified(true); sessionStorage.setItem("otp_verified","1"); }} />;
+  if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); sessionStorage.setItem("otp_verified_" + uid,"1"); }} />;
+  if (!otpVerified) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); sessionStorage.setItem("otp_verified_" + uid,"1"); }} />;
 
   return (
     <div className="app">
@@ -162,7 +171,7 @@ export default function App() {
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
           <button className="btn-icon-sm" onClick={() => setForumModal(true)} style={{width:"auto",padding:"0 8px",fontSize:12}}>Forum</button>
-          <button className="btn-logout" onClick={() => { signOut(auth); sessionStorage.removeItem("otp_verified"); }}>Dang xuat</button>
+          <button className="btn-logout" onClick={() => { sessionStorage.removeItem("otp_verified_" + user.uid); signOut(auth); }}>Dang xuat</button>
         </div>
       </header>
 
@@ -374,14 +383,14 @@ function LoginScreen({ onOtpVerified }) {
     const expected = await generateTOTP(SHARED_TOTP_SECRET);
     if (otp !== expected) { setError("Ma OTP khong dung"); return; }
     localStorage.setItem("totp_seen_" + tempUser.uid, "1");
-    onOtpVerified();
+    onOtpVerified(tempUser.uid);
   };
 
   const handleVerify = async () => {
     setError("");
     const expected = await generateTOTP(SHARED_TOTP_SECRET);
     if (otp !== expected) { setError("Ma OTP khong dung"); return; }
-    onOtpVerified();
+    onOtpVerified(tempUser.uid);
   };
 
   return (
