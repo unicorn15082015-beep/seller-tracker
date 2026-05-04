@@ -6,7 +6,7 @@ import {
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "./firebase";
-import { authenticator } from "otplib";
+import { authenticator } from "otplib/authenticator";
 import QRCode from "qrcode";
 import "./styles/main.css";
 
