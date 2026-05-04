@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/seller-tracker/static/css/main.e3934a1c.css",
-    "main.js": "/seller-tracker/static/js/main.2b64483b.js",
+    "main.js": "/seller-tracker/static/js/main.d4143508.js",
     "index.html": "/seller-tracker/index.html",
     "main.e3934a1c.css.map": "/seller-tracker/static/css/main.e3934a1c.css.map",
-    "main.2b64483b.js.map": "/seller-tracker/static/js/main.2b64483b.js.map"
+    "main.d4143508.js.map": "/seller-tracker/static/js/main.d4143508.js.map"
   },
   "entrypoints": [
     "static/css/main.e3934a1c.css",
-    "static/js/main.2b64483b.js"
+    "static/js/main.d4143508.js"
   ]
 }
