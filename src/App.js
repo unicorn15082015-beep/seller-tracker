@@ -4,7 +4,7 @@ import {
   collection, addDoc, onSnapshot, query, orderBy,
   deleteDoc, doc, updateDoc, serverTimestamp
 } from "firebase/firestore";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { db, auth } from "./firebase";
 import QRCode from "qrcode";
 import "./styles/main.css";
@@ -35,6 +35,10 @@ async function generateTOTP(secret) {
 }
 
 const ADMIN_UID = "76kdiqnd8sblIMR97u54RIXxZ5C2";
+const ALLOWED_EMAILS = [
+  "lengocthang.mb@gmail.com",  // Admin
+  "torostore.sell@gmail.com",   // Seller
+];
 const SHARED_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
 const isAdmin = (user) => user?.uid === ADMIN_UID;
 const fmtVND = (n) => new Intl.NumberFormat("vi-VN").format(Math.round(n || 0)) + " d";
@@ -154,9 +158,7 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Dang tai...</div>;
-  const getCookie = (name) => document.cookie.split(";").find(c => c.trim().startsWith(name + "="))?.split("=")[1];
-  if (!user) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); document.cookie = "otp_ok=1;path=/;max-age=86400"; }} />;
-  if (!otpVerified && !document.cookie.includes("otp_ok=1")) return <LoginScreen onOtpVerified={(uid) => { setOtpVerified(true); document.cookie = "otp_ok=1;path=/;max-age=86400"; }} />;
+  if (!user) return <LoginScreen />;
 
   return (
     <div className="app">
@@ -171,7 +173,7 @@ export default function App() {
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
           <button className="btn-icon-sm" onClick={() => setForumModal(true)} style={{width:"auto",padding:"0 8px",fontSize:12}}>Forum</button>
-          <button className="btn-logout" onClick={() => { document.cookie = "otp_ok=;path=/;max-age=0"; signOut(auth); }}>Dang xuat</button>
+          <button className="btn-logout" onClick={() => { signOut(auth); }}>Dang xuat</button>
         </div>
       </header>
 
@@ -358,49 +360,38 @@ function Field({ label, children }) {
   return <div className="field">{label && <label>{label}</label>}{children}</div>;
 }
 
-function LoginScreen({ onOtpVerified }) {
+function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState("login");
-  const [qrUrl, setQrUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tempUser, setTempUser] = useState(null);
+  const [tab, setTab] = useState("google"); // google | email
 
-  const handleLogin = async () => {
-    if (!email || !password) { setError("Vui long nhap day du"); return; }
+  const handleGoogleLogin = async () => {
     setLoading(true); setError("");
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const u = cred.user; setTempUser(u);
-      const seen = localStorage.getItem("totp_seen_" + u.uid);
-      if (seen) {
-        setStep("verify");
-      } else {
-        const otpauth = `otpauth://totp/SellerTracker:${encodeURIComponent(email)}?secret=${SHARED_TOTP_SECRET}&issuer=SellerTracker`;
-        const qr = await QRCode.toDataURL(otpauth);
-        setQrUrl(qr); setStep("setup");
+      const provider = new GoogleAuthProvider();
+      const cred = await signInWithPopup(auth, provider);
+      const userEmail = cred.user.email;
+      if (!ALLOWED_EMAILS.includes(userEmail)) {
+        await signOut(auth);
+        setError("Email " + userEmail + " khong duoc phep truy cap!");
       }
-    } catch(e) { setError("Email hoac mat khau khong dung"); }
+    } catch(e) {
+      setError("Dang nhap that bai!");
+    }
     setLoading(false);
   };
 
-  const handleSetup = async () => {
-    setError("");
-    const expected = await generateTOTP(SHARED_TOTP_SECRET);
-    if (otp !== expected) { setError("Ma OTP khong dung"); return; }
-    document.cookie = "otp_ok=1;path=/;max-age=86400";
-    localStorage.setItem("totp_seen_" + tempUser.uid, "1");
-    onOtpVerified(tempUser.uid);
-  };
-
-  const handleVerify = async () => {
-    setError("");
-    const expected = await generateTOTP(SHARED_TOTP_SECRET);
-    if (otp !== expected) { setError("Ma OTP khong dung"); return; }
-    document.cookie = "otp_ok=1;path=/;max-age=86400";
-    onOtpVerified(tempUser.uid);
+  const handleEmailLogin = async () => {
+    if (!email || !password) { setError("Vui long nhap day du"); return; }
+    setLoading(true); setError("");
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch(e) {
+      setError("Email hoac mat khau khong dung");
+    }
+    setLoading(false);
   };
 
   return (
@@ -409,35 +400,27 @@ function LoginScreen({ onOtpVerified }) {
         <div className="login-logo">
           <span style={{fontSize:32}}>&#x1F6D2;</span>
           <div className="login-title">SELLER TRACKER</div>
-          <div className="login-sub">{step==="login"?"Dang nhap de tiep tuc":step==="setup"?"Thiet lap xac thuc 2 buoc":"Nhap ma xac thuc"}</div>
         </div>
-        {step==="login" && (
-          <div className="login-fields">
-            <div className="field"><label>Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com" onKeyDown={e=>e.key==="Enter"&&handleLogin()}/></div>
-            <div className="field"><label>Mat khau</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="..." onKeyDown={e=>e.key==="Enter"&&handleLogin()}/></div>
-            {error && <div className="login-error">{error}</div>}
-            <button className="btn-login" onClick={handleLogin} disabled={loading}>{loading?"Dang kiem tra...":"Tiep tuc"}</button>
-          </div>
-        )}
-        {step==="setup" && (
-          <div className="login-fields">
-            <div className="totp-setup-note">Quet QR bang app <b>Authy</b></div>
-            {qrUrl && <img src={qrUrl} alt="QR" className="qr-code"/>}
-            <div className="totp-secret-box">Secret: <span>{SHARED_TOTP_SECRET}</span></div>
-            <div className="field"><label>Nhap ma 6 so</label><input type="text" inputMode="numeric" maxLength={6} value={otp} onChange={e=>setOtp(e.target.value)} placeholder="000000" onKeyDown={e=>e.key==="Enter"&&handleSetup()}/></div>
-            {error && <div className="login-error">{error}</div>}
-            <button className="btn-login" onClick={handleSetup}>Xac nhan & Dang nhap</button>
-          </div>
-        )}
-        {step==="verify" && (
-          <div className="login-fields">
-            <div className="totp-setup-note">Mo app <b>Authy</b> va nhap ma 6 so</div>
-            <div className="field"><label>Ma OTP</label><input type="text" inputMode="numeric" maxLength={6} value={otp} onChange={e=>setOtp(e.target.value)} placeholder="000000" autoFocus onKeyDown={e=>e.key==="Enter"&&handleVerify()}/></div>
-            {error && <div className="login-error">{error}</div>}
-            <button className="btn-login" onClick={handleVerify}>Dang nhap</button>
-            <button className="btn-back" onClick={()=>{setStep("login");setError("");setOtp("");}}>Quay lai</button>
-          </div>
-        )}
+        <div className="login-tab-btns">
+          <button className={`login-tab-btn ${tab==="google"?"active":""}`} onClick={() => { setTab("google"); setError(""); }}>Seller</button>
+          <button className={`login-tab-btn ${tab==="email"?"active":""}`} onClick={() => { setTab("email"); setError(""); }}>Admin</button>
+        </div>
+        <div className="login-fields">
+          {error && <div className="login-error">{error}</div>}
+          {tab === "google" && (
+            <button className="btn-google" onClick={handleGoogleLogin} disabled={loading}>
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              {loading ? "Dang dang nhap..." : "Dang nhap voi Google"}
+            </button>
+          )}
+          {tab === "email" && (
+            <>
+              <div className="field"><label>Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@email.com" onKeyDown={e=>e.key==="Enter"&&handleEmailLogin()}/></div>
+              <div className="field"><label>Mat khau</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="..." onKeyDown={e=>e.key==="Enter"&&handleEmailLogin()}/></div>
+              <button className="btn-login" onClick={handleEmailLogin} disabled={loading}>{loading?"Dang dang nhap...":"Dang nhap"}</button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
