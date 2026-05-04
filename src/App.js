@@ -466,7 +466,7 @@ function LoginScreen({ onOtpVerified }) {
         setStep("setup");
       }
     } catch(e) {
-      setError("Email hoặc mật khẩu không đúng");
+      setError("Lỗi: " + e.message);
     }
     setLoading(false);
   };
