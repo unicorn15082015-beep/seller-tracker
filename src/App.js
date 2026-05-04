@@ -2,11 +2,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  deleteDoc, doc, updateDoc, serverTimestamp
+  deleteDoc, doc, updateDoc, serverTimestamp, getDoc, setDoc
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "./firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 import { authenticator } from "otplib";
 import QRCode from "qrcode";
 import "./styles/main.css";
