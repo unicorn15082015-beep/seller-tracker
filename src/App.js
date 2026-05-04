@@ -100,6 +100,15 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
+    const u1 = onSnapshot(qO, s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const u2 = onSnapshot(collection(db, "seller_teams"), s => setTeams(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const u3 = onSnapshot(collection(db, "seller_forums"), s => setForums(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); u3(); };
+  }, [user]);
+
   const inMonth = (r) => {
     if (!filterMonth) return true;
     const d = r.ngay ? new Date(r.ngay + "T00:00:00") : (r.createdAt?.toDate ? r.createdAt.toDate() : new Date());
@@ -311,6 +320,9 @@ function OrderModal({ data, teams, forums, onClose, onSave }) {
 
 function ListModal({ title, items, onClose, onAdd, onDelete }) {
   const [newItem, setNewItem] = useState("");
+  const handleAdd = () => {
+    if (newItem.trim()) { onAdd(newItem.trim()); setNewItem(""); }
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{width:360}}>
@@ -320,10 +332,15 @@ function ListModal({ title, items, onClose, onAdd, onDelete }) {
         </div>
         <div className="modal-body">
           <div style={{display:"flex",gap:8,marginBottom:16}}>
-            <input value={newItem} onChange={e => setNewItem(e.target.value)} placeholder="Ten moi..."
-              onKeyDown={e => { if(e.key==="Enter"&&newItem.trim()){onAdd(newItem.trim());setNewItem("");}}}
-              style={{flex:1,padding:"8px 12px",background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:7,color:"var(--text)",fontFamily:"var(--sans)",fontSize:13,outline:"none"}}/>
-            <button className="btn-save" onClick={() => {if(newItem.trim()){onAdd(newItem.trim());setNewItem("");}}}><Icon name="plus" size={14}/></button>
+            <input
+              value={newItem}
+              onChange={e => setNewItem(e.target.value)}
+              placeholder="Ten moi..."
+              onKeyDown={e => { if(e.key==="Enter") handleAdd(); }}
+              onClick={e => e.stopPropagation()}
+              style={{flex:1,padding:"8px 12px",background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:7,color:"var(--text)",fontFamily:"var(--sans)",fontSize:13,outline:"none"}}
+            />
+            <button className="btn-save" onClick={e => { e.stopPropagation(); handleAdd(); }}><Icon name="plus" size={14}/></button>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {items.map(t => (
