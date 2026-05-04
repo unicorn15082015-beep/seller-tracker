@@ -85,12 +85,15 @@ export default function App() {
   const [otpVerified, setOtpVerified] = useState(() => sessionStorage.getItem("otp_verified") === "1");
   const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [forums, setForums] = useState([]);
   const [tab, setTab] = useState("pending");
   const isAdminUser = isAdmin(user);
   const [search, setSearch] = useState("");
   const [activeTeam, setActiveTeam] = useState("all");
+  const [activeForum, setActiveForum] = useState("all");
   const [modal, setModal] = useState(null);
   const [teamModal, setTeamModal] = useState(false);
+  const [forumModal, setForumModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const now = new Date();
   const [filterMonth, setFilterMonth] = useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
@@ -115,7 +118,11 @@ export default function App() {
     const unsubTeams = onSnapshot(qTeams, (snap) => {
       setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsubOrders(); unsubTeams(); };
+    const qForums = query(collection(db, "seller_forums"), orderBy("createdAt", "asc"));
+    const unsubForums = onSnapshot(qForums, (snap) => {
+      setForums(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubOrders(); unsubTeams(); unsubForums(); };
   }, [user]);
 
   // Filter
@@ -136,6 +143,8 @@ export default function App() {
     else if (tab === "completed") rows = rows.filter(r => r.trangThai === "Completed");
     // Filter by team
     if (activeTeam !== "all") rows = rows.filter(r => r.team === activeTeam);
+    // Filter by forum
+    if (activeForum !== "all") rows = rows.filter(r => r.forum === activeForum);
     // Search
     if (search) rows = rows.filter(r => (r.orderId || "").toLowerCase().includes(search.toLowerCase()));
     return rows;
@@ -163,19 +172,30 @@ export default function App() {
   const deleteTeam = async (id) => {
     if (window.confirm("Xóa team này?")) await deleteDoc(doc(db, "seller_teams", id));
   };
+  const saveForum = async (name) => {
+    await addDoc(collection(db, "seller_forums"), { name, createdAt: serverTimestamp() });
+  };
+  const deleteForum = async (id) => {
+    if (window.confirm("Xóa forum này?")) await deleteDoc(doc(db, "seller_forums", id));
+  };
 
   // Export CSV
   const exportCSV = () => {
-    const headers = ["Ngày","ID Đơn","Giá Nhập VND","Giá Bán USD","Team","Link","Trạng Thái"];
-    const rows = filtered.map(r => [
+    // Chỉ xuất Pending theo filter hiện tại
+    const exportRows = filtered.filter(r => r.trangThai === "Pending");
+    const headers = ["Ngày","ID Đơn","Giá Nhập VND","Giá Bán USD","Team","Forum","Link","Trạng Thái"];
+    const rows = exportRows.map(r => [
       fmtDate(r), r.orderId || "", r.giaNhap || 0, r.giaBan || 0,
-      r.team || "", r.link || "", r.trangThai || ""
+      r.team || "", r.forum || "", r.link || "", r.trangThai || ""
     ]);
+    if (rows.length === 0) { alert("Không có đơn Pending nào để xuất!"); return; }
     const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `seller_${filterMonth || "all"}_${tab}.csv`;
+    const teamLabel = activeTeam !== "all" ? activeTeam : "AllTeam";
+    const forumLabel = activeForum !== "all" ? activeForum : "AllForum";
+    a.download = `pending_${teamLabel}_${forumLabel}_${filterMonth || "all"}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 
@@ -198,6 +218,7 @@ export default function App() {
         <div className="header-user">
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" title="Quản lý Team" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
+          <button className="btn-icon-sm" title="Quản lý Forum" onClick={() => setForumModal(true)} style={{fontSize:13, width:"auto", padding:"0 8px", gap:4, display:"flex"}}>🌐 Forum</button>
           <button className="btn-logout" onClick={() => { signOut(auth); sessionStorage.removeItem("otp_verified"); }}>Đăng xuất</button>
         </div>
       </header>
@@ -237,6 +258,19 @@ export default function App() {
         ))}
       </div>
 
+      {/* FORUM FILTER TABS */}
+      {forums.length > 0 && (
+        <div className="forum-tabs">
+          <span className="forum-label">Forum:</span>
+          <button className={`forum-tab ${activeForum === "all" ? "active" : ""}`} onClick={() => setActiveForum("all")}>Tất cả</button>
+          {forums.map(f => (
+            <button key={f.id} className={`forum-tab ${activeForum === f.name ? "active" : ""}`} onClick={() => setActiveForum(f.name)}>
+              {f.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* TOOLBAR */}
       <div className="toolbar">
         <div className="search-box">
@@ -265,6 +299,7 @@ export default function App() {
                 <th>Giá Nhập VND</th>
                 <th>Giá Bán USD</th>
                 <th>Team</th>
+                <th>Forum</th>
                 <th>Link</th>
                 <th>Trạng Thái</th>
                 <th></th>
@@ -322,16 +357,18 @@ export default function App() {
       </div>
 
       {/* ORDER MODAL */}
-      {modal && <OrderModal data={modal.data} teams={teams} onClose={() => setModal(null)} onSave={saveOrder} />}
+      {modal && <OrderModal data={modal.data} teams={teams} forums={forums} onClose={() => setModal(null)} onSave={saveOrder} />}
 
       {/* TEAM MANAGER MODAL */}
       {teamModal && <TeamModal teams={teams} onClose={() => setTeamModal(false)} onAdd={saveTeam} onDelete={deleteTeam} />}
+      {/* FORUM MANAGER MODAL */}
+      {forumModal && <TeamModal teams={forums} onClose={() => setForumModal(false)} onAdd={saveForum} onDelete={deleteForum} title="Quản lý Forum Bán" />}
     </div>
   );
 }
 
 // ─── ORDER MODAL ──────────────────────────────────────────────
-function OrderModal({ data, teams, onClose, onSave }) {
+function OrderModal({ data, teams, forums, onClose, onSave }) {
   const todayStr = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({
     ngay: data?.ngay || todayStr,
@@ -340,6 +377,7 @@ function OrderModal({ data, teams, onClose, onSave }) {
     giaBan: data?.giaBan || "",
     team: data?.team || (teams[0]?.name || ""),
     link: data?.link || "",
+    forum: data?.forum || "",
     trangThai: data?.trangThai || "Pending", // auto Pending for new orders
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -389,13 +427,13 @@ function OrderModal({ data, teams, onClose, onSave }) {
 }
 
 // ─── TEAM MODAL ───────────────────────────────────────────────
-function TeamModal({ teams, onClose, onAdd, onDelete }) {
+function TeamModal({ teams, onClose, onAdd, onDelete, title = "Quản lý Team" }) {
   const [newTeam, setNewTeam] = useState("");
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{width:360}}>
         <div className="modal-header">
-          <span>Quản lý Team</span>
+          <span>{title}</span>
           <button className="icon-btn" onClick={onClose}><Icon name="close" size={16}/></button>
         </div>
         <div className="modal-body">

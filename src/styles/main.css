@@ -164,3 +164,10 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .status-select.yellow { background: var(--yellow-dim); color: var(--yellow); border-color: rgba(245,158,11,0.3); }
 .status-select.red { background: var(--red-dim); color: var(--red); border-color: rgba(244,63,94,0.3); }
 .status-select.green { background: var(--green-dim); color: var(--green); border-color: rgba(16,185,129,0.3); }
+
+/* ── FORUM TABS ──────────────────────────────────────────────── */
+.forum-tabs { display: flex; align-items: center; gap: 6px; padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; flex-wrap: wrap; }
+.forum-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+.forum-tab { padding: 4px 12px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); border-radius: 20px; font-family: var(--sans); font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.forum-tab:hover { background: var(--bg2); color: var(--text); }
+.forum-tab.active { background: rgba(139,92,246,0.15); color: #a78bfa; border-color: rgba(139,92,246,0.4); }
