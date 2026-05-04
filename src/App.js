@@ -82,7 +82,7 @@ const Icon = ({ name, size = 16 }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(() => sessionStorage.getItem("otp_verified") === "1");
   const [orders, setOrders] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tab, setTab] = useState("pending");
@@ -99,7 +99,7 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthLoading(false);
-      if (!u) setOtpVerified(false);
+      if (!u) { setOtpVerified(false); sessionStorage.removeItem("otp_verified"); }
     });
     return () => unsub();
   }, []);
@@ -180,7 +180,7 @@ export default function App() {
   };
 
   if (authLoading) return <div className="auth-loading">Đang tải...</div>;
-  if (!user || !otpVerified) return <LoginScreen onOtpVerified={() => setOtpVerified(true)} />;
+  if (!user || !otpVerified) return <LoginScreen onOtpVerified={() => { setOtpVerified(true); sessionStorage.setItem("otp_verified", "1"); }} />;
 
   return (
     <div className="app">
@@ -198,7 +198,7 @@ export default function App() {
         <div className="header-user">
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" title="Quản lý Team" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
-          <button className="btn-logout" onClick={() => signOut(auth)}>Đăng xuất</button>
+          <button className="btn-logout" onClick={() => { signOut(auth); sessionStorage.removeItem("otp_verified"); }}>Đăng xuất</button>
         </div>
       </header>
 
