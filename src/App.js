@@ -90,23 +90,16 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u); setAuthLoading(false);
-      if (!u) { setOtpVerified(false); }
+      if (u) {
+        const verified = sessionStorage.getItem("otp_verified_" + u.uid) === "1";
+        setOtpVerified(verified);
+      } else {
+        setOtpVerified(false);
+      }
     });
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    const qO = query(collection(db, "seller_orders"), orderBy("createdAt", "desc"));
-    const u1 = onSnapshot(qO, s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const qT = query(collection(db, "seller_teams"), orderBy("createdAt", "asc"));
-    const u2 = onSnapshot(qT, s => setTeams(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const qF = query(collection(db, "seller_forums"), orderBy("createdAt", "asc"));
-    const u3 = onSnapshot(qF, s => setForums(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { u1(); u2(); u3(); };
-  }, [user]);
-
-  const inMonth = (r) => {
     if (!filterMonth) return true;
     const d = r.ngay ? new Date(r.ngay + "T00:00:00") : (r.createdAt?.toDate ? r.createdAt.toDate() : new Date());
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` === filterMonth;
