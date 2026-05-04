@@ -82,6 +82,7 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [teamModal, setTeamModal] = useState(false);
   const [forumModal, setForumModal] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const now = new Date();
   const [filterMonth, setFilterMonth] = useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
 
@@ -120,7 +121,7 @@ export default function App() {
     };
     startListeners();
     return () => { u1&&u1(); u2&&u2(); u3&&u3(); };
-  }, [user]);
+  }, [user, reloadKey]);
 
   const inMonth = (r) => {
     if (!filterMonth) return true;
@@ -186,6 +187,7 @@ export default function App() {
           <span className="user-email">{user.email}</span>
           <button className="btn-icon-sm" onClick={() => setTeamModal(true)}><Icon name="settings" size={14}/></button>
           <button className="btn-icon-sm" onClick={() => setForumModal(true)} style={{width:"auto",padding:"0 8px",fontSize:12}}>Forum</button>
+          <button className="btn-icon-sm" onClick={() => setReloadKey(k=>k+1)} title="Tai lai du lieu" style={{fontSize:12}}>↻</button>
           <button className="btn-logout" onClick={() => { signOut(auth); }}>Dang xuat</button>
         </div>
       </header>
