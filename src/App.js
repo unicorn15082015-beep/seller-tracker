@@ -176,8 +176,14 @@ export default function App() {
     if (id) await updateDoc(doc(db, "seller_orders", id), { ...data, updatedAt: serverTimestamp() });
     else    await addDoc(collection(db, "seller_orders"), { ...data, createdAt: serverTimestamp() });
     setModal(null);
+    setTimeout(() => fetchData(), 500);
   };
-  const deleteOrder = async (id) => { if (window.confirm("Xac nhan xoa?")) await deleteDoc(doc(db, "seller_orders", id)); };
+  const deleteOrder = async (id) => {
+    if (window.confirm("Xac nhan xoa?")) {
+      await deleteDoc(doc(db, "seller_orders", id));
+      setTimeout(() => fetchData(), 500);
+    }
+  };
   const saveTeam   = async (name) => { await addDoc(collection(db, "seller_teams"),  { name, createdAt: serverTimestamp() }); };
   const deleteTeam  = async (id)  => { if (window.confirm("Xoa team?"))  await deleteDoc(doc(db, "seller_teams", id)); };
   const saveForum  = async (name) => { await addDoc(collection(db, "seller_forums"), { name, createdAt: serverTimestamp() }); };
@@ -275,7 +281,7 @@ export default function App() {
                 <td>{r.link ? <a href={r.link} target="_blank" rel="noreferrer" className="order-link"><Icon name="link" size={12}/> Link</a> : "-"}</td>
                 <td>
                   <select className={`status-select ${STATUS_COLORS[r.trangThai]||"blue"}`} value={r.trangThai}
-                    onChange={e => updateDoc(doc(db,"seller_orders",r.id),{trangThai:e.target.value})}>
+                    onChange={e => { updateDoc(doc(db,"seller_orders",r.id),{trangThai:e.target.value}); setTimeout(()=>fetchData(),500); }}>
                     <option value="Pending">Pending</option>
                     <option value="Issues">Issues</option>
                     {isAdminUser && <option value="Completed">Completed</option>}
