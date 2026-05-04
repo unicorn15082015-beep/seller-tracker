@@ -42,6 +42,8 @@ import "./styles/main.css";
 
 // ─── ADMIN ───────────────────────────────────────────────────
 const ADMIN_UID = "76kdiqnd8sblIMR97u54RIXxZ5C2";
+// TOTP shared secret - tất cả user dùng chung 1 mã Authy
+const SHARED_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
 const isAdmin = (user) => user?.uid === ADMIN_UID;
 
 // ─── HELPERS ─────────────────────────────────────────────────
@@ -453,22 +455,20 @@ function LoginScreen({ onOtpVerified }) {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const u = cred.user;
       setTempUser(u);
-      // Wait for Firestore connection
-      await new Promise(r => setTimeout(r, 1500));
-      const totpDoc = await getDocFromServer(doc(db, "totp_secrets", u.uid));
-      if (totpDoc.exists()) {
-        setSecret(totpDoc.data().secret);
+      // Check if first time - show QR, else go to verify
+      const seen = localStorage.getItem("totp_seen_" + u.uid);
+      if (seen) {
+        setSecret(SHARED_TOTP_SECRET);
         setStep("verify");
       } else {
-        const newSecret = generateSecret();
-        setSecret(newSecret);
-        const otpauth = `otpauth://totp/Seller%20Tracker:${encodeURIComponent(email)}?secret=${newSecret}&issuer=SellerTracker`;
+        setSecret(SHARED_TOTP_SECRET);
+        const otpauth = `otpauth://totp/Seller%20Tracker:${encodeURIComponent(email)}?secret=${SHARED_TOTP_SECRET}&issuer=SellerTracker`;
         const qr = await QRCode.toDataURL(otpauth);
         setQrUrl(qr);
         setStep("setup");
       }
     } catch(e) {
-      setError("Lỗi: " + e.message);
+      setError("Email hoặc mật khẩu không đúng");
     }
     setLoading(false);
   };
@@ -476,10 +476,8 @@ function LoginScreen({ onOtpVerified }) {
   const handleSetup = async () => { setError('');
     const expected = await generateTOTP(secret);
     if (otp !== expected) { setError("Mã OTP không đúng, thử lại"); return; }
-    setLoading(true);
-    await setDoc(doc(db, "totp_secrets", tempUser.uid), { secret });
+    localStorage.setItem("totp_seen_" + tempUser.uid, "1");
     onOtpVerified();
-    setLoading(false);
   };
 
   const handleVerify = async () => { setError('');
