@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  deleteDoc, doc, updateDoc, serverTimestamp, getDoc, setDoc
+  deleteDoc, doc, updateDoc, serverTimestamp, getDoc, getDocFromServer, setDoc
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "./firebase";
@@ -455,7 +455,7 @@ function LoginScreen({ onOtpVerified }) {
       setTempUser(u);
       // Wait for Firestore connection
       await new Promise(r => setTimeout(r, 1500));
-      const totpDoc = await getDoc(doc(db, "totp_secrets", u.uid));
+      const totpDoc = await getDocFromServer(doc(db, "totp_secrets", u.uid));
       if (totpDoc.exists()) {
         setSecret(totpDoc.data().secret);
         setStep("verify");
